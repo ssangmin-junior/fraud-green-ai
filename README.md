@@ -9,19 +9,19 @@
 
 ```mermaid
 graph LR
-    Data[Data Source] --> Feast[Feature Store (Feast)]
-    Feast --> Train[Training Pipeline (Airflow)]
-    Feast --> Serve[Serving API (FastAPI)]
+    Data["Data Source"] --> Feast["Feature Store (Feast)"]
+    Feast --> Train["Training Pipeline (Airflow)"]
+    Feast --> Serve["Serving API (FastAPI)"]
     
-    subgraph CI/CD
-        Code[GitHub] --> Actions[GitHub Actions]
-        Actions --> Test[Unit Test & Lint]
-        Test --> Build[Docker Build]
+    subgraph CI_CD ["CI/CD"]
+        Code["GitHub"] --> Actions["GitHub Actions"]
+        Actions --> Test["Unit Test & Lint"]
+        Test --> Build["Docker Build"]
     end
     
-    subgraph CT (Continuous Training)
-        Train --> MLflow[MLflow Tracking]
-        MLflow --> Registry[Model Registry]
+    subgraph CT ["CT (Continuous Training)"]
+        Train --> MLflow["MLflow Tracking"]
+        MLflow --> Registry["Model Registry"]
         Registry -- Auto Promotion --> Serve
     end
 ```
