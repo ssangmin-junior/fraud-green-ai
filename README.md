@@ -1,6 +1,6 @@
 # 🌿 Green Fraud Detection MLOps Pipeline
 
-**"친환경 금융 사기 탐지 시스템"**을 위한 End-to-End MLOps 파이프라인 구축 프로젝트입니다.
+"친환경 금융 사기 탐지 시스템"을 위한 End-to-End MLOps 파이프라인 구축 프로젝트입니다.
 데이터 전처리부터 모델 학습, 배포, 그리고 지속적 학습(CT)까지의 전 과정을 자동화하였으며, 탄소 배출량을 모니터링하여 친환경 AI를 지향합니다.
 
 ## 🚀 Project Architecture
