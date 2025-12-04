@@ -1,6 +1,7 @@
 import pytest
 import sys
 import os
+import torch
 
 # Add src to sys.path to allow imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
