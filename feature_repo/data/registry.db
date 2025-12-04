@@ -1,0 +1,27 @@
+
+M
+-
+transaction"TransactionIDJfraud_detection
+š»ÆÉè¹æ‡š»ÆÉè¹æ‡
+F
+&
+__dummy"
+__dummy_idJfraud_detection
+š»ÆÉÆ£ˆš»ÆÉÆ£ˆ1"$a79cf807-0fd0-4d81-b296-d13163343fd9*©»ÆÉ¨¦û—2Ã
+„
+transaction_statsfraud_detectiontransaction"
+TransactionAmt"
+	ProductCD"
+
+DeviceType"
+isFraud*
+teamfraud_detection2€£:Üevent_timestamp*created_timestampZFDd:/folder/ml/fraud-green-ai/data/processed/transaction_stats.parquetŠ1feast.infra.offline_stores.file_source.FileSource¢transaction_stats_source’š»ÆÉ°Ä°´"š»ÆÉè¹æ‡@b
+TransactionID:
+š»ÆÉÆ£ˆ©»ÆÉÈŸ—
+©˜ÁÉ èä–«¸ÈÉàçîíR•
+’
+,feast.infra.online_stores.sqlite.SqliteTable"b
+=D:\folder\ml\fraud-green-ai\feature_repo\data\online_store.db!fraud_detection_transaction_statsbîevent_timestamp*created_timestampZFDd:/folder/ml/fraud-green-ai/data/processed/transaction_stats.parquetŠ1feast.infra.offline_stores.file_source.FileSource¢transaction_stats_sourceªfraud_detection’š»ÆÉ°Ä°´"š»ÆÉè¹æ‡Š1
+
+fraud_detection
+š»ÆÉ€Ã†¶š»ÆÉ€Ã†¶

@@ -1,0 +1,25 @@
+FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
+
+# 시스템 패키지 설치: Git(버전 추적용), sysfsutils(전력 측정 디버깅용)
+RUN apt-get update && apt-get install -y \
+    git \
+    sysfsutils \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 의존성 설치 (requirements.txt 파일을 컨테이너 안으로 복사해서 설치)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 소스 코드는 이미지를 빌드할 때 복사하지 않고, 
+# 실행할 때 볼륨(-v)으로 연결하여 수정 사항이 바로 반영되도록 할 예정입니다.
+# 다만, 기본 경로 설정 등을 위해 폴더 구조는 잡아둡니다.
+COPY src/ ./src/
+
+# PYTHONPATH 설정 (src 폴더를 파이썬 모듈 경로로 인식)
+
+ENV PYTHONPATH="/app/src"
+# 컨테이너 실행 시 기본 명령어
+CMD ["python", "src/models/train.py"]
