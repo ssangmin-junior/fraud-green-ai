@@ -86,6 +86,7 @@ def train(model_type, epochs, nrows=None, data_path=None, resume_from=None):
     print(f">>> [Experiment Start] Model Type: {model_type}, Epochs: {epochs}")
     
     # [New] MLflow 설정 (함수 내부로 이동하여 테스트 시 에러 방지)
+    # Docker 내부 통신이므로 5000번 포트 유지 (컨테이너 내부 포트는 안 바뀜)
     remote_server_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow_server:5000")
     mlflow.set_tracking_uri(remote_server_uri)
     try:
