@@ -46,6 +46,7 @@ services:
 
   airflow-scheduler:
     image: apache/airflow:2.7.1
+    user: root # [New] Docker 조작을 위해 Root 권한 부여
     restart: always
     depends_on:
       airflow-init:
