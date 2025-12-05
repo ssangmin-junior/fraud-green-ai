@@ -4,14 +4,10 @@ from airflow.operators.bash import BashOperator
 from airflow.utils.dates import days_ago
 from docker.types import Mount
 
-# =============================================================================
-# [환경 설정]
-# Mac Mini (Self-hosted Runner) 절대 경로
 HOST_DATA_PATH = "/Users/macmini/.gemini/antigravity/scratch/fraud-green-ai/actions-runner/_work/fraud-green-ai/fraud-green-ai/data"
 NETWORK_NAME = "docker_green_ml_net" 
 DOCKER_IMAGE = "fraud-detection-train:latest"
 
-# DAG 기본 설정
 default_args = {
     'owner': 'antigravity',
     'depends_on_past': False,
@@ -23,145 +19,72 @@ default_args = {
 with DAG(
     'fraud_detection_pipeline',
     default_args=default_args,
-    description='End-to-End Fraud Detection Pipeline (Preprocessing -> Train -> Benchmark)',
-    schedule_interval=None, # 수동 실행 (Trigger)
+    description='End-to-End Fraud Detection Pipeline',
+    schedule_interval=None,
     start_date=days_ago(1),
     tags=['mlops', 'fraud-detection'],
     catchup=False,
 ) as dag:
 
-    # -------------------------------------------------------------------------
-    # 1. Preprocessing Task (Split Data)
-    # -------------------------------------------------------------------------
+    # 1. 전처리
     preprocessing = DockerOperator(
         task_id='preprocessing_split',
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        # loader.py에 새로 만든 함수 실행
         command="python -c 'from data.loader import preprocess_and_save_chunks; preprocess_and_save_chunks()'",
         docker_url="unix://var/run/docker.sock",
         network_mode=NETWORK_NAME,
-        mounts=[
-            Mount(source=HOST_DATA_PATH, target="/app/data", type="bind"),
-        ],
-        mount_tmp_dir=False, 
-        environment={
-            "PYTHONPATH": "/app/src" # [New] data 모듈 경로 인식
-        }
+        mounts=[Mount(source=HOST_DATA_PATH, target="/app/data", type="bind")],
+        environment={"PYTHONPATH": "/app/src"},
+        mount_tmp_dir=False,
     )
 
-    # -------------------------------------------------------------------------
-    # 2. Incremental Training & Benchmark Tasks
-    # -------------------------------------------------------------------------
-    models = ["baseline", "heavy", "light"]
-    n_chunks = 3 
-    
-    previous_task = preprocessing
-
-    for model_type in models:
-        
-        model_previous_task = None
-        
-        for chunk_idx in range(n_chunks):
-            
-            resume_arg = ""
-            if chunk_idx > 0:
-                resume_arg = f"--resume_from /app/data/model_{model_type}_latest.pth"
-            
-            train_task = DockerOperator(
-                task_id=f'train_{model_type}_chunk_{chunk_idx}',
-                image=DOCKER_IMAGE,
-                api_version='auto',
-                auto_remove=True,
-                command=f"python src/models/train.py --model_type {model_type} --epochs 1 --data_path /app/data/processed/train_part_{chunk_idx}.pt {resume_arg}",
-                docker_url="unix://var/run/docker.sock",
-                network_mode=NETWORK_NAME,
-                mounts=[
-                    Mount(source=HOST_DATA_PATH, target="/app/data", type="bind"),
-                ],
-                environment={
-                    "MLFLOW_TRACKING_URI": "http://mlflow_server:5000",
-                    "MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
-                    "AWS_ACCESS_KEY_ID": "minio_admin",
-                    "AWS_SECRET_ACCESS_KEY": "minio_password",
-                    "PYTHONPATH": "/app/src" # [New]
-                },
-                mount_tmp_dir=False,
-            )
-            
-            if model_previous_task:
-                model_previous_task >> train_task
-            else:
-                previous_task >> train_task
-                
-            model_previous_task = train_task
-
-        # 마지막 청크 학습이 끝나면 벤치마크 수행
-        benchmark_cmd = f"""
-        sh -c '
-        run_id=$(cat /app/data/run_id_{model_type}.txt) && 
-        echo "Found Run ID: $run_id" && 
-        python src/serving/benchmark.py --model_type {model_type} --run_id $run_id
-        '
-        """
-        
-        benchmark_task = DockerOperator(
-            task_id=f'benchmark_{model_type}',
-            image=DOCKER_IMAGE,
-            api_version='auto',
-            auto_remove=True,
-            command=benchmark_cmd,
-            docker_url="unix://var/run/docker.sock",
-            network_mode=NETWORK_NAME,
-            mounts=[
-                Mount(source=HOST_DATA_PATH, target="/app/data", type="bind"),
-            ],
-            environment={
-                "MLFLOW_TRACKING_URI": "http://mlflow_server:5000",
-                "MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
-                "AWS_ACCESS_KEY_ID": "minio_admin",
-                "AWS_SECRET_ACCESS_KEY": "minio_password",
-                "PYTHONPATH": "/app/src" # [New]
-            },
-            mount_tmp_dir=False,
-        )
-
-        model_previous_task >> benchmark_task
-        previous_task = benchmark_task
-
-    # -------------------------------------------------------------------------
-    # 3. Model Registration Task
-    # -------------------------------------------------------------------------
-    register_cmd = "python src/serving/register_model.py --experiment_name fraud-detection-experiment --metric accuracy"
-    
-    register_task = DockerOperator(
-        task_id='register_best_model',
+    # 2. 학습 (간소화: 3가지 모델만 순차 실행)
+    train_baseline = DockerOperator(
+        task_id='train_baseline',
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        command=register_cmd,
+        command="python src/models/train.py --model_type baseline --epochs 1",
         docker_url="unix://var/run/docker.sock",
         network_mode=NETWORK_NAME,
-        mounts=[
-            Mount(source=HOST_DATA_PATH, target="/app/data", type="bind"),
-        ],
+        mounts=[Mount(source=HOST_DATA_PATH, target="/app/data", type="bind")],
         environment={
+            "PYTHONPATH": "/app/src",
             "MLFLOW_TRACKING_URI": "http://mlflow_server:5000",
             "MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
             "AWS_ACCESS_KEY_ID": "minio_admin",
-            "AWS_SECRET_ACCESS_KEY": "minio_password",
-            "PYTHONPATH": "/app/src" # [New]
+            "AWS_SECRET_ACCESS_KEY": "minio_password"
         },
         mount_tmp_dir=False,
     )
 
-    # -------------------------------------------------------------------------
-    # 4. Reporting Task
-    # -------------------------------------------------------------------------
-    report = BashOperator(
-        task_id='generate_report',
-        bash_command='echo "Pipeline Completed. Best model registered to Production."',
+    # 3. 모델 등록
+    register_model = DockerOperator(
+        task_id='register_best_model',
+        image=DOCKER_IMAGE,
+        api_version='auto',
+        auto_remove=True,
+        command="python src/serving/register_model.py --experiment_name Fraud_Detection_Benchmark --metric accuracy",
+        docker_url="unix://var/run/docker.sock",
+        network_mode=NETWORK_NAME,
+        mounts=[Mount(source=HOST_DATA_PATH, target="/app/data", type="bind")],
+        environment={
+            "PYTHONPATH": "/app/src",
+            "MLFLOW_TRACKING_URI": "http://mlflow_server:5000",
+            "MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
+            "AWS_ACCESS_KEY_ID": "minio_admin",
+            "AWS_SECRET_ACCESS_KEY": "minio_password"
+        },
+        mount_tmp_dir=False,
     )
 
-    previous_task >> register_task >> report
+    # 4. 리포트
+    report = BashOperator(
+        task_id='generate_report',
+        bash_command='echo "Pipeline Completed!"',
+    )
+
+    # 연결
+    preprocessing >> train_baseline >> register_model >> report
