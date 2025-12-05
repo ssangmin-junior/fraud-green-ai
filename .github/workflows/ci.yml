@@ -39,7 +39,12 @@ jobs:
       run: |
         echo "🚀 Starting Deployment on Mac Mini..."
         
-        # Docker Compose 실행 (Mac 환경변수 호환을 위해 전체 경로 사용 권장되지만, 일단 기본 명령어로 시도)
-        docker-compose -f docker/docker-compose.yml up -d --build --remove-orphans
+        # [최적화] 변경된 'api-server'만 빌드 (MLflow 등은 재빌드 안 함)
+        docker-compose -f docker/docker-compose.yml build api-server
+        
+        # 변경된 서비스만 교체하고 나머지는 유지
+        docker-compose -f docker/docker-compose.yml up -d --no-deps api-server
+        # 혹시 꺼져있는 다른 서비스가 있다면 켜주기 (선택 사항)
+        docker-compose -f docker/docker-compose.yml up -d
         
         echo "✅ Deployment Successful! Service is updated."
