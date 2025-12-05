@@ -48,3 +48,16 @@ jobs:
         docker-compose -f docker/docker-compose.yml up -d
         
         echo "✅ Deployment Successful! Service is updated."
+
+    - name: 🔍 Debugging - Check Docker Status
+      if: always()
+      run: |
+        echo "=== 1. Docker Container Status ==="
+        docker ps -a
+        
+        echo "\n=== 2. MLflow Logs (Last 50 lines) ==="
+        docker-compose -f docker/docker-compose.yml logs --tail=50 mlflow_server || echo "Failed to get logs"
+        
+        echo "\n=== 3. Port Usage (5000/5001) ==="
+        lsof -i :5000 || echo "Port 5000 is free"
+        lsof -i :5001 || echo "Port 5001 is free"
