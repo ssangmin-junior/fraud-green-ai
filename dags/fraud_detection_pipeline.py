@@ -15,8 +15,11 @@ from docker.types import Mount
 #    - 'docker compose ps' 또는 'docker network ls'로 확인 가능
 #    - 보통 '폴더명_네트워크명' 형식입니다 (예: docker_green_ml_net).
 # =============================================================================
-HOST_DATA_PATH = "d:/folder/ml/fraud-green-ai/data" 
-NETWORK_NAME = "docker_green_ml_net" 
+# [환경 설정]
+# Mac Mini (Self-hosted Runner) 절대 경로
+# 로그에서 확인된 경로: /Users/macmini/.gemini/antigravity/scratch/fraud-green-ai/actions-runner/_work/fraud-green-ai/fraud-green-ai
+HOST_DATA_PATH = "/Users/macmini/.gemini/antigravity/scratch/fraud-green-ai/actions-runner/_work/fraud-green-ai/fraud-green-ai/data"
+NETWORK_NAME = "docker_green_ml_net" # docker-compose 파일이 'docker' 폴더에 있으므로 접두사가 'docker'일 가능성 높음 
 DOCKER_IMAGE = "fraud-detection-train:latest"
 
 # DAG 기본 설정
