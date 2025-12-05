@@ -46,7 +46,8 @@ with DAG(
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        command="python src/models/train.py --model_type baseline --epochs 1",
+        # [수정] 전체 CSV 대신 전처리된 청크 파일(.pt) 로드하여 메모리 절약
+        command="python src/models/train.py --model_type baseline --epochs 1 --data_path /app/data/processed/train_part_0.pt",
         docker_url="unix://var/run/docker.sock",
         network_mode=NETWORK_NAME,
         mounts=[Mount(source=HOST_DATA_PATH, target="/app/data", type="bind")],
