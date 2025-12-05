@@ -65,6 +65,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
+    image: fraud-detection-train:latest # [New] Airflow가 학습용으로 갖다 쓸 이미지 이름 지정
     container_name: fraud_api_server
     restart: always
     ports:
