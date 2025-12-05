@@ -1,25 +1,14 @@
 from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from airflow.operators.bash import BashOperator
-from airflow.operators.empty import EmptyOperator
 from airflow.utils.dates import days_ago
-from airflow.utils.task_group import TaskGroup
 from docker.types import Mount
 
 # =============================================================================
 # [환경 설정]
-# 로컬 환경에 맞게 아래 경로와 네트워크 설정을 변경해야 합니다.
-# 1. HOST_DATA_PATH: 호스트(Windows)의 데이터 폴더 절대 경로
-#    - DockerOperator는 호스트의 경로를 컨테이너에 마운트합니다.
-# 2. NETWORK_NAME: MLflow, MinIO 등이 실행 중인 Docker Network 이름
-#    - 'docker compose ps' 또는 'docker network ls'로 확인 가능
-#    - 보통 '폴더명_네트워크명' 형식입니다 (예: docker_green_ml_net).
-# =============================================================================
-# [환경 설정]
 # Mac Mini (Self-hosted Runner) 절대 경로
-# 로그에서 확인된 경로: /Users/macmini/.gemini/antigravity/scratch/fraud-green-ai/actions-runner/_work/fraud-green-ai/fraud-green-ai
 HOST_DATA_PATH = "/Users/macmini/.gemini/antigravity/scratch/fraud-green-ai/actions-runner/_work/fraud-green-ai/fraud-green-ai/data"
-NETWORK_NAME = "docker_green_ml_net" # docker-compose 파일이 'docker' 폴더에 있으므로 접두사가 'docker'일 가능성 높음 
+NETWORK_NAME = "docker_green_ml_net" 
 DOCKER_IMAGE = "fraud-detection-train:latest"
 
 # DAG 기본 설정
@@ -44,7 +33,6 @@ with DAG(
     # -------------------------------------------------------------------------
     # 1. Preprocessing Task (Split Data)
     # -------------------------------------------------------------------------
-    # 데이터를 Chunk 단위로 쪼개서 /app/data/processed/train_part_X.pt 로 저장합니다.
     preprocessing = DockerOperator(
         task_id='preprocessing_split',
         image=DOCKER_IMAGE,
@@ -58,27 +46,25 @@ with DAG(
             Mount(source=HOST_DATA_PATH, target="/app/data", type="bind"),
         ],
         mount_tmp_dir=False, 
+        environment={
+            "PYTHONPATH": "/app/src" # [New] data 모듈 경로 인식
+        }
     )
 
     # -------------------------------------------------------------------------
     # 2. Incremental Training & Benchmark Tasks
     # -------------------------------------------------------------------------
-    # 쪼개진 데이터(Chunk 0 -> Chunk 1 -> Chunk 2)를 순서대로 학습합니다.
-    
     models = ["baseline", "heavy", "light"]
-    n_chunks = 3 # loader.py에서 생성하는 청크 개수와 일치해야 함
+    n_chunks = 3 
     
-    # 순차 실행을 위해 이전 태스크를 기억할 변수
     previous_task = preprocessing
 
     for model_type in models:
         
-        # 모델별로 Chunk 0 -> Chunk 1 -> Chunk 2 순서로 학습
         model_previous_task = None
         
         for chunk_idx in range(n_chunks):
             
-            # 첫 번째 청크는 맨땅에서 시작, 그 이후는 이전 모델을 로드(Resume)
             resume_arg = ""
             if chunk_idx > 0:
                 resume_arg = f"--resume_from /app/data/model_{model_type}_latest.pth"
@@ -88,7 +74,6 @@ with DAG(
                 image=DOCKER_IMAGE,
                 api_version='auto',
                 auto_remove=True,
-                # 수정된 train.py 실행 (Chunk 파일 로드 + Resume)
                 command=f"python src/models/train.py --model_type {model_type} --epochs 1 --data_path /app/data/processed/train_part_{chunk_idx}.pt {resume_arg}",
                 docker_url="unix://var/run/docker.sock",
                 network_mode=NETWORK_NAME,
@@ -99,7 +84,8 @@ with DAG(
                     "MLFLOW_TRACKING_URI": "http://mlflow_server:5000",
                     "MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
                     "AWS_ACCESS_KEY_ID": "minio_admin",
-                    "AWS_SECRET_ACCESS_KEY": "minio_password"
+                    "AWS_SECRET_ACCESS_KEY": "minio_password",
+                    "PYTHONPATH": "/app/src" # [New]
                 },
                 mount_tmp_dir=False,
             )
@@ -107,7 +93,6 @@ with DAG(
             if model_previous_task:
                 model_previous_task >> train_task
             else:
-                # 첫 청크는 이전 모델(또는 전처리) 완료 후 시작
                 previous_task >> train_task
                 
             model_previous_task = train_task
@@ -136,21 +121,18 @@ with DAG(
                 "MLFLOW_TRACKING_URI": "http://mlflow_server:5000",
                 "MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
                 "AWS_ACCESS_KEY_ID": "minio_admin",
-                "AWS_SECRET_ACCESS_KEY": "minio_password"
+                "AWS_SECRET_ACCESS_KEY": "minio_password",
+                "PYTHONPATH": "/app/src" # [New]
             },
             mount_tmp_dir=False,
         )
 
-        # 학습(마지막 청크) >> 벤치마크
         model_previous_task >> benchmark_task
-        
-        # 다음 모델은 현재 모델의 벤치마크가 끝난 후 시작 (전체 직렬화)
         previous_task = benchmark_task
 
     # -------------------------------------------------------------------------
-    # 3. Model Registration Task (Best Model -> Production)
+    # 3. Model Registration Task
     # -------------------------------------------------------------------------
-    # 모든 모델의 벤치마크가 끝나면, 가장 성능 좋은 모델을 찾아 Registry에 등록합니다.
     register_cmd = "python src/serving/register_model.py --experiment_name fraud-detection-experiment --metric accuracy"
     
     register_task = DockerOperator(
@@ -168,7 +150,8 @@ with DAG(
             "MLFLOW_TRACKING_URI": "http://mlflow_server:5000",
             "MLFLOW_S3_ENDPOINT_URL": "http://minio:9000",
             "AWS_ACCESS_KEY_ID": "minio_admin",
-            "AWS_SECRET_ACCESS_KEY": "minio_password"
+            "AWS_SECRET_ACCESS_KEY": "minio_password",
+            "PYTHONPATH": "/app/src" # [New]
         },
         mount_tmp_dir=False,
     )
@@ -181,8 +164,4 @@ with DAG(
         bash_command='echo "Pipeline Completed. Best model registered to Production."',
     )
 
-    # 전체 DAG 흐름 연결
-    # 모든 벤치마크 완료 -> 모델 등록 -> 리포트
     previous_task >> register_task >> report
-
-
