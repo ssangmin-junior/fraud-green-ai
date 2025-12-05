@@ -8,47 +8,38 @@ on:
 
 jobs:
   build-test-deploy:
-    # [핵심] GitHub 서버가 아닌 내 Mac Mini(Self-hosted Runner)에서 실행
     runs-on: self-hosted
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Mac Mini에 Python 3.10 환경 설정
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.10"
+    # [수정] setup-python 제거 (Mac Mini에 설치된 시스템 Python 사용)
+    # - name: Set up Python 3.10
+    #   uses: actions/setup-python@v4 ...
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        # Mac에서는 python3 명령어를 명시적으로 사용
+        python3 -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then python3 -m pip install -r requirements.txt; fi
 
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        # python3 -m flake8 형태로 실행하여 경로 문제 방지
+        python3 -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        python3 -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Run Unit Tests
       run: |
-        pytest tests/
+        python3 -m pytest tests/
 
-    # [CD 단계] 테스트가 통과하면 Docker Compose로 배포
-    # Pull Request가 아니라 실제 'push' 이벤트일 때만 배포 실행
     - name: Deploy to Mac Mini Server
       if: github.event_name == 'push'
       run: |
         echo "🚀 Starting Deployment on Mac Mini..."
         
-        # Docker Compose로 서비스 재시작 (변경된 코드 반영하여 빌드)
-        # -f: 파일 경로 지정
-        # -d: 백그라운드 실행
-        # --build: 이미지 새로 빌드
-        # --remove-orphans: 정의되지 않은 잉여 컨테이너 제거
+        # Docker Compose 실행 (Mac 환경변수 호환을 위해 전체 경로 사용 권장되지만, 일단 기본 명령어로 시도)
         docker-compose -f docker/docker-compose.yml up -d --build --remove-orphans
         
         echo "✅ Deployment Successful! Service is updated."
